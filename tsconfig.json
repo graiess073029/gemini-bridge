@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ],
+    "types": ["node"],
+    
+    "paths": {
+      "*": ["node_modules/*"]
+    }
+    
+  },
+
+  "include": [
+    "./**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
