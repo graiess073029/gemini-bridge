@@ -13,8 +13,8 @@ dotenv.config()
 export const config: appConfig = {
 
     server: {
-        serverPort: Number(process.env.SERVER_PORT),
-        host: process.env.SERVER_HOST || "",
+        serverPort: Number(process.env.PORT),
+        host: process.env.SERVER_HOST || "0.0.0.0",
         secretKey: process.env.SECRET_KEY || "^AtfVfvjèMybXr(g$P24)"
     },
 
