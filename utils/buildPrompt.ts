@@ -170,7 +170,7 @@ CPU CORE TOPOLOGY RULES
 - For Intel hybrid CPUs: identify Performance cores and Efficiency cores separately
 - For AMD SMT CPUs: each core has two threads, use "standard" type
 - For each core, group all its thread usage sensors together in usageSensors
-- For core clock, use the actual core clock sensor, not the effective or utility clock
+- For core clock, use the effective core clock sensor, not the actual or utility clock
 - For core temperature, use the per-core temperature sensor if available (e.g., "Core 0 TjMax", "Core 0 Temp")
 - Each core entry must represent one physical core with all its logical threads
 
