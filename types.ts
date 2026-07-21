@@ -91,21 +91,33 @@ export interface LabelMapping {
 }
 
 export interface GeminiResponse {
-  candidates: {
-    content: {
-      parts: { text: string }[];
-      role: string;
+  // ── Nouveau format interactions API (2026) ──
+  output_text?: string;
+
+  // ── Ancien format generateContent (fallback) ──
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+      role?: string;
     };
-    finishReason: string;
-    index: number;
-    safetyRatings: {
-      category: string;
-      probability: string;
-    }[];
-  }[];
-  usageMetadata: {
-    promptTokenCount: number;
-    candidatesTokenCount: number;
-    totalTokenCount: number;
+    finishReason?: string;
+    index?: number;
+    safetyRatings?: Array<{
+      category?: string;
+      probability?: string;
+    }>;
+  }>;
+
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
+
+  // ── Erreurs API ──
+  error?: {
+    code: number;
+    message: string;
+    status: string;
   };
 }
