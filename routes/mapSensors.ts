@@ -58,7 +58,7 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
 
 
         const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${config.apiKey}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
