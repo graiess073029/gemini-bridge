@@ -83,6 +83,8 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
 
         const cleanJson = extractJson(rawText);
 
+        console.log(cleanJson)
+
         let labelMapping: LabelMapping;
         try {
             labelMapping = JSON.parse(cleanJson);
