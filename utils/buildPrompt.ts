@@ -69,7 +69,7 @@ You MUST distinguish between the dedicated GPU (dGPU) and the integrated GPU (iG
 - Examples of dGPU groups: "GPU [#0] NVIDIA GeForce RTX 3060", "GPU [#1] AMD Radeon RX 6600"
 
 **iGPU (Integrated GPU):**
-- Usually lives INSIDE the CPU sensor group (especially on Intel platforms)
+- On Intel platforms, it lives in an independent group like "iGPU ..."
 - On AMD: may appear in a separate "Radeon Graphics" group but still shares system RAM
 - NEVER has VRAM sensors — it uses system RAM instead of dedicated video memory
 - Does NOT have vramAllocated or vramAvailable sensors
@@ -82,7 +82,7 @@ You MUST distinguish between the dedicated GPU (dGPU) and the integrated GPU (iG
 1. Look for VRAM sensors — ONLY the dGPU has them
 2. Check the sensor group name:
    - dGPU: standalone group with GPU vendor name (NVIDIA/AMD)
-   - iGPU: either inside CPU group (Intel) or in a shared SoC/Graphics group (AMD)
+   - iGPU: have less sensors than the dGPU
 3. iGPU clock sensors are often labeled "GPU Clock" or "GFX Clock" inside CPU/SoC groups
 4. dGPU clock sensors are labeled "GPU Clock" or "Core Clock" in the dedicated GPU group
 
