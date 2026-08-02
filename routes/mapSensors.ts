@@ -1,6 +1,6 @@
 import { config } from "../config/config.js";
 import type { NextFunction } from "express";
-import { CustomRequest, CustomResponse, GeminiResponse, HttpResponse, LabelMapping } from "../types.js";
+import { CustomRequest, CustomResponse, HttpResponse, LabelMapping } from "../types.js";
 import { z } from 'zod';
 import { buildPrompt } from "../utils/buildPrompt.js";
 import { validateLabelMapping } from "../utils/validateMapping.js";
@@ -77,13 +77,24 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
             throw new Error(`Gemini API HTTP ${geminiResponse.status}: ${errorText}`);
         }
 
-        const data = (await geminiResponse.json()) as GeminiResponse;
+        const data = await geminiResponse.json() as any;
 
-        const rawText = (data as any).output_text
-            ?? data.candidates?.[0]?.content?.parts?.[0]?.text;
+        let rawText = "";
+        if (Array.isArray(data.steps)) {
+            for (const step of data.steps) {
+                if (step.type === "model_output" && Array.isArray(step.content)) {
+                    for (const block of step.content) {
+                        if (block.type === "text" && typeof block.text === "string") {
+                            rawText += block.text;
+                        }
+                    }
+                }
+            }
+        }
 
         if (!rawText) {
-            throw new Error("Gemini returned empty response — no text found");
+            log(`Unexpected response structure: ${JSON.stringify(data, null, 2)}`);
+            throw new Error("Gemini returned empty response — no text found in steps");
         }
 
         const cleanJson = extractJson(rawText);
