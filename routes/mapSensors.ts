@@ -38,7 +38,7 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
         }
 
         log(`Mapping ${candidates.length} sensors with AI...`);
-        log(JSON.stringfy(candidates))
+        log(JSON.stringify(candidates))
 
         const prompt = buildPrompt(candidates);
 
