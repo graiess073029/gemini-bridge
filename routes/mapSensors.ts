@@ -15,7 +15,7 @@ const candidatesSchema = z.array(z.object({
     sensorId: z.number()
 }));
 
-const GEMINI_TIMEOUT_MS = 30_000; // 30s timeout
+const GEMINI_TIMEOUT_MS = 30_000; 
 
 export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: NextFunction): Promise<void> => {
     const requestId = crypto.randomUUID();
@@ -24,7 +24,6 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
     const log = (msg: string) => console.log(`[${requestId}] ${msg}`);
 
     try {
-        // ── Auth check ─────────────────────────────────────────────
         if (req.body?.secretKey !== config.server.secretKey) {
             log("Auth failed — invalid secret key");
             const response: HttpResponse = {
@@ -35,7 +34,6 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
             return;
         }
 
-        // ── Validate candidates ────────────────────────────────────
         const candidates = req.body?.candidates;
         const parseResult = candidatesSchema.safeParse(candidates);
 
@@ -51,10 +49,8 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
 
         log(`Mapping ${candidates.length} sensors with AI...`);
 
-        // ── Build prompt ─────────────────────────────────────────────
         const prompt = buildPrompt(candidates);
 
-        // ── Call Gemini API (new interactions endpoint, 2026) ──────
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
@@ -71,9 +67,9 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
                     body: JSON.stringify({
                         model: "gemini-3.5-flash",
                         input: prompt,
-                        generation_config: {
+                        generation_config: {         
                             temperature: 0,
-                            responseMimeType: "application/json",
+                            response_mime_type: "application/json", 
                         },
                     }),
                     signal: controller.signal,
@@ -90,9 +86,6 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
 
         const data = (await geminiResponse.json()) as GeminiResponse;
 
-        // ── Extract text from response ─────────────────────────────
-        // New interactions API returns output_text at root level
-        // Fallback to old nested structure for compatibility
         const rawText = (data as any).output_text
             ?? data.candidates?.[0]?.content?.parts?.[0]?.text;
 
@@ -100,7 +93,6 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
             throw new Error("Gemini returned empty response — no text found");
         }
 
-        // ── Parse JSON ─────────────────────────────────────────────
         const cleanJson = extractJson(rawText);
 
         let labelMapping: LabelMapping;
@@ -110,14 +102,12 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
             throw new Error(`Gemini returned invalid JSON: ${cleanJson}`);
         }
 
-        // ── Validate mapping structure ─────────────────────────────
         validateLabelMapping(labelMapping);
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
         log(`Sensor mapping completed in ${duration}s`);
         log(`Result: ${JSON.stringify(labelMapping, null, 2)}`);
 
-        // ── Success response ───────────────────────────────────────
         const response: HttpResponse = {
             state: "success",
             message: "Sensor mapping completed successfully.",
