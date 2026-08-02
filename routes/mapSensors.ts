@@ -15,35 +15,25 @@ const candidatesSchema = z.array(z.object({
     sensorId: z.number()
 }));
 
-const GEMINI_TIMEOUT_MS = 30_000; 
+const GEMINI_TIMEOUT_MS = 30_000;
 
 export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: NextFunction): Promise<void> => {
     const requestId = crypto.randomUUID();
     const startTime = Date.now();
-
     const log = (msg: string) => console.log(`[${requestId}] ${msg}`);
 
     try {
         if (req.body?.secretKey !== config.server.secretKey) {
             log("Auth failed — invalid secret key");
-            const response: HttpResponse = {
-                state: 'error',
-                message: "Invalid secret key"
-            };
-            res.status(401).json(response);
+            res.status(401).json({ state: 'error', message: "Invalid secret key" });
             return;
         }
 
         const candidates = req.body?.candidates;
         const parseResult = candidatesSchema.safeParse(candidates);
-
         if (!parseResult.success) {
             log(`Invalid candidates: ${parseResult.error.message}`);
-            const response: HttpResponse = {
-                state: 'error',
-                message: "Invalid candidates format"
-            };
-            res.status(400).json(response);
+            res.status(400).json({ state: 'error', message: "Invalid candidates format" });
             return;
         }
 
@@ -67,9 +57,12 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
                     body: JSON.stringify({
                         model: "gemini-3.5-flash",
                         input: prompt,
-                        generation_config: {         
+                        response_format: {
+                            type: "text",
+                            mime_type: "application/json",
+                        },
+                        generation_config: {
                             temperature: 0,
-                            response_mime_type: "application/json", 
                         },
                     }),
                     signal: controller.signal,
@@ -94,7 +87,6 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
         }
 
         const cleanJson = extractJson(rawText);
-
         let labelMapping: LabelMapping;
         try {
             labelMapping = JSON.parse(cleanJson);
@@ -108,13 +100,11 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
         log(`Sensor mapping completed in ${duration}s`);
         log(`Result: ${JSON.stringify(labelMapping, null, 2)}`);
 
-        const response: HttpResponse = {
+        res.status(200).json({
             state: "success",
             message: "Sensor mapping completed successfully.",
             data: labelMapping
-        };
-
-        res.status(200).json(response);
+        });
 
     } catch (err) {
         log(`Error: ${err instanceof Error ? err.message : String(err)}`);
