@@ -15,7 +15,7 @@ const candidatesSchema = z.array(z.object({
     sensorId: z.number()
 }));
 
-const GEMINI_TIMEOUT_MS = 30_000;
+const GEMINI_TIMEOUT_MS = 60_000;
 
 export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: NextFunction): Promise<void> => {
     const requestId = crypto.randomUUID();
