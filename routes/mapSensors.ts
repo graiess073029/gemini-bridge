@@ -71,7 +71,7 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
                     body: JSON.stringify({
                         model: "gemini-3.5-flash",
                         input: prompt,
-                        generationConfig: {
+                        generation_config: {
                             temperature: 0,
                             responseMimeType: "application/json",
                         },
