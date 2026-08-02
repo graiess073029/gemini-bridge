@@ -56,7 +56,7 @@ export const mapSensors = async (req: CustomRequest, res: CustomResponse, next: 
                         "x-goog-api-key": config.apiKey,
                     },
                     body: JSON.stringify({
-                        model: "gemini-3.5-flash",
+                        model: "gemini-3.6-flash",
                         input: prompt,
                         response_format: {
                             type: "text",
