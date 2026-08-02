@@ -2,9 +2,9 @@ import { SensorCandidate } from "../types.js";
 
 export const buildPrompt = (candidates: SensorCandidate[]): string => {
   return `
- You are an expert hardware telemetry engineer with deep knowledge of all hardware monitoring software including HWiNFO, LibreHardwareMonitor, OpenHardwareMonitor, AIDA64, and others.
+You are an expert hardware telemetry engineer with deep knowledge of all hardware monitoring software including HWiNFO, LibreHardwareMonitor, OpenHardwareMonitor, AIDA64, and others.
 
-You have complete knowledge of how every CPU, GPU, motherboard, and peripheral vendor names their sensors — including Intel, AMD, NVIDIA, MSI, ASUS, Gigabyte, ASRock, Dell, Lenovo, HP, and all other manufacturers.
+You have complete knowledge of how every CPU, GPU, motherboard, and peripheral vendor names their sensors.
 
 Your task is to analyze a list of hardware sensor candidates and map each one to the correct semantic slot in the output JSON.
 
@@ -13,103 +13,64 @@ STRICT OUTPUT RULES
 - Return ONLY valid JSON
 - No markdown, no explanations, no comments, no trailing commas
 - EVERY mapped sensor in the output must be an object with exactly two fields: { "sensorId": <number>, "labelOriginal": <exact string from the candidate "label" field> }
-- The sensorId must be the exact numeric id from the candidate's "sensorId" property (this is the group/sensor ID)
+- The sensorId must be the exact numeric id from the candidate's "sensorId" property
 - The labelOriginal must be the exact string from the candidate's "label" property — do not modify, abbreviate, or reformat it
 - NEVER return actual sensor readings, temperatures, percentages, watts, MHz, MB, or any measured data
 - NEVER use the index field — it is volatile and changes between HWiNFO sessions
-- NEVER use the readingId field — it is not unique and must be completely ignored
 - NEVER invent sensor labels or sensorIds — only use values that exist in the provided candidates
-- You may use ANY property from the candidate objects to make your decision (label, sensorId, unit, group, readingId, etc.) — there are no restricted properties
+- You may use ANY property from the candidate objects to make your decision (label, sensorId, unit, group, type, etc.)
 - If a sensor cannot be confidently identified, use null for the entire slot (not an object)
 
-YOUR APPROACH
+DGPU VS IGPU — ABSOLUTE RULES
 
-Use your hardware knowledge to understand what each sensor measures regardless of its name.
-Sensor names vary across vendors, software versions, and hardware generations.
-You must identify the correct sensor by understanding its semantic meaning, not by matching keywords.
+You MUST output BOTH gpu AND iGpu blocks. One of them may be all-null, but both blocks must exist in the output.
 
-Examples of the same concept named differently:
-- CPU die temperature: "CPU Package", "Tctl/Tdie", "Core Temp", "CPU Temp", "Die Temp", "CPU Junction"
-- CPU total usage: "Total CPU Usage", "CPU Usage", "CPU Load", "Processor Total"
-- GPU core load: "GPU Core Load", "GPU Usage", "GPU Load", "3D Usage"
-- RAM used: "Physical Memory Used", "Memory Used", "RAM Used", "Used RAM"
-- Battery charge rate: "Charge Rate", "Battery Power", "AC Power", "Charging Power"
+dGPU (Dedicated GPU) identification:
+- The group name contains a discrete GPU vendor and model number: "NVIDIA GeForce RTX", "NVIDIA GeForce GTX", "NVIDIA GeForce GT", "NVIDIA GeForce [any model]", "AMD Radeon RX", "AMD Radeon HD", "AMD Radeon [any model]", "Intel Arc [any model]"
+- The group name starts with "dGPU" or "GPU [#n]" where n is a number
+- ALWAYS has VRAM sensors: look for labels containing "Memory Available", "Memory Allocated", "D3D Memory Dedicated", "D3D Memory Dynamic" with unit MB
+- Has its own power sensor labeled "GPU Power" or similar in the same group
+- Has temperature sensors labeled "GPU Temperature" or "GPU Core Temperature" in the same group
+- Has usage sensors labeled "GPU Core Load" or "GPU Total Usage" in the same group
+- Has clock sensors labeled "GPU Clock" or "GPU Memory Clock" in the same group
 
-Always pick the most representative single sensor for each slot:
-- For temperatures: the whole-package or die temperature, not per-core or junction
-- For clocks: the average or boost clock, not base or bus clock
-- For usage: the total aggregate, not per-core or per-thread
-- For VRAM: the currently allocated amount and the total available capacity
-- For iGPU: sensors from the integrated graphics unit that shares system memory, not the dedicated GPU
+iGPU (Integrated GPU) identification:
+- The group name contains "Intel UHD Graphics", "Intel Iris", "Intel HD Graphics", "Intel Graphics", "AMD Radeon Graphics" (without a model number like RX or HD), "iGPU"
+- The group name starts with "iGPU"
+- NEVER has dedicated VRAM sensors with unit MB in the same group
+- Uses system RAM, not dedicated video memory
+- If the system has both dGPU and iGPU, the iGPU group will have fewer sensors and no VRAM allocation sensors
 
-Never map sensors across hardware groups.
-CPU sensors must come from CPU-related groups.
-GPU sensors must come from GPU-related groups.
-Battery sensors must come from battery-related groups.
+CRITICAL: If a candidate group contains a discrete GPU vendor name with a model number (e.g., "NVIDIA GeForce RTX", "AMD Radeon RX", "Intel Arc"), it IS the dGPU. Map it to the "gpu" block.
 
-CRITICAL: The labelOriginal field in each output object must contain the exact candidate label string.
-Do not modify, abbreviate, or reformat labels — copy them exactly as provided.
-Example: if a candidate shows "label": "P-core 0 T0 Usage", you must output { "sensorId": 3, "labelOriginal": "P-core 0 T0 Usage" }, not "P-core 0 T0" or any variation.
+If a candidate group contains an integrated GPU name (e.g., "Intel UHD Graphics", "Intel Iris", "iGPU"), it IS the iGPU. Map it to the "iGpu" block.
 
-DGPU vs IGPU — CRITICAL DISTINCTION
+Never map dGPU sensors to iGPU slots or vice versa.
 
-You MUST distinguish between the dedicated GPU (dGPU) and the integrated GPU (iGPU).
+If only one GPU exists:
+- If it has VRAM sensors (Memory Available, Memory Allocated, D3D Memory) with unit MB → map to "gpu", set all "iGpu" fields to null
+- If it has no VRAM sensors → map to "iGpu", set all "gpu" fields to null
 
-dGPU (Dedicated GPU):
-- Has its own independent sensor group (e.g., "NVIDIA GeForce RTX 3060", "AMD Radeon RX 6700 XT")
-- ALWAYS has VRAM sensors (vramAllocated, vramAvailable) — this is the definitive identifier
-- Has its own power sensor separate from CPU package power
-- Typically manufactured by NVIDIA or AMD as a discrete card
-- Examples of dGPU groups: "GPU [#0] NVIDIA GeForce RTX 3060", "GPU [#1] AMD Radeon RX 6600"
+GPU SENSOR MAPPING — EXACT PRIORITY
 
-iGPU (Integrated GPU):
-- On Intel platforms, it lives in an independent group like "iGPU ..."
-- On AMD: may appear in a separate "Radeon Graphics" group but still shares system RAM
-- NEVER has VRAM sensors — it uses system RAM instead of dedicated video memory
-- Does NOT have vramAllocated or vramAvailable sensors
-- Power consumption is typically rolled into CPU package power, not measured separately
-- Examples of iGPU sensors found in CPU groups:
-  - Intel: "GPU Temperature", "GT Cores", "GPU Clock", "GPU Usage", "GPU Power"
-  - AMD: "SoC Temperature", "GFX Temperature", "GFX Clock", "GPU Load"
+For dGPU (gpu block):
+- usage: "GPU Core Load" if available, else "GPU Total Usage", else "GPU D3D Usage"
+- clock: "GPU Clock" if available, else first clock sensor in the dGPU group
+- temperature: "GPU Temperature" if available, else "GPU Core Temperature"
+- power: "GPU Power" if available
+- vramAllocated: "GPU Memory Allocated" if available, else "GPU D3D Memory Dedicated"
+- vramAvailable: "GPU Memory Available" if available
 
-How to tell them apart:
-1. Look for VRAM sensors — ONLY the dGPU has them
-2. Check the sensor group name:
-   - dGPU: standalone group with GPU vendor name (NVIDIA/AMD)
-   - iGPU: have less sensors than the dGPU
-3. iGPU clock sensors are often labeled "GPU Clock" or "GFX Clock" inside CPU/SoC groups
-4. dGPU clock sensors are labeled "GPU Clock" or "Core Clock" in the dedicated GPU group
-
-NEVER map dGPU sensors to iGPU slots or vice versa.
-If only one GPU exists in the system:
-- If it has VRAM → map to "gpu" (dGPU), set "iGpu" to null
-- If it has no VRAM → map to "iGpu", set "gpu" to null
-
-IGPU TEMPERATURE, POWER & VRAM ALLOCATION
-
-The iGPU may expose temperature, power, and VRAM allocation sensors even though it uses system RAM.
-
-iGPU Temperature:
-- Look for sensors labeled "GPU Temperature", "GFX Temperature", or "GT Cores" within the CPU or iGPU group
-- Map to iGpu.temperature if found
-- If no temperature sensor exists for the iGPU, set to null
-
-iGPU Power:
-- Look for sensors labeled "GPU Power", "GT Power", "SoC Power", or "GFX Power" within the CPU or iGPU group
-- This represents the power draw of the integrated graphics unit
-- Map to iGpu.power if found
-- If no power sensor exists for the iGPU, set to null
-
-iGPU VRAM Allocation:
-- Some platforms (especially Intel) expose "GPU Memory Allocated" or "GPU DMEM" sensors
-- This represents how much system RAM is currently reserved for the iGPU
-- Map to iGpu.vramAllocated if found
-- If no allocation sensor exists, set to null
-- The maximum iGPU memory is handled separately by the application (typically 50% of system RAM)
+For iGPU (iGpu block):
+- usage: "GPU Total Usage" if available, else "GPU D3D Usage", else "GPU Computing Usage"
+- clock: "GPU Clock" if available
+- temperature: "GPU Core Temperature" if available, else "GPU Temperature"
+- power: "IGPU Power" if available, else "GPU Power" (only if in iGPU group)
+- vramAllocated: "GPU D3D Memory Dynamic" if available, else null
 
 CPU VOLTAGE
 
-- Look for the CPU core voltage or VID (Voltage Identification) sensor
+- Look for the CPU core voltage or VID sensor
 - Common labels: "CPU Core Voltage", "CPU Vcore", "Core VID", "CPU VID", "Vcore"
 - Must be a voltage sensor (unit "V") from the CPU group
 - Map to cpu.voltage
@@ -117,12 +78,11 @@ CPU VOLTAGE
 
 CPU PER-CORE TEMPERATURES
 
-- Many modern CPUs expose per-core temperature sensors in addition to the package temperature
-- Look for sensors labeled "Core 0 TjMax", "Core 0 Distance to TjMax", "Core 0 Temperature", "CPU Core 0", etc.
+- Many modern CPUs expose per-core temperature sensors
+- Look for sensors labeled "Core 0 TjMax", "Core 0 Distance to TjMax", "Core 0 Temperature", "CPU Core 0", "P-core 0", "E-core 6", etc.
 - For each physical core identified in cpu.cores, attempt to find its corresponding temperature sensor
 - Map the per-core temperature directly into the core entry as temperatureSensor
 - If a core has no dedicated temperature sensor, set temperatureSensor to null
-- Do NOT invent temperature sensors — only include those that actually exist in the candidates
 
 WHAT TO IGNORE
 
@@ -136,14 +96,14 @@ Never map these to any slot:
 - PCIe error counters
 - Voltage offset sensors
 - Bus clock or uncore clock
-- Storage sensors — storage is handled by a separate service, set all storage fields to null
+- Storage sensors — set all storage fields to null
 
 FAN RULES
 
 - Every candidate with unit "RPM" is a fan or pump
 - Add ALL RPM candidates to the fans array automatically
 - Use the candidate label as the fan name
-- Do not limit or filter fans — include every single RPM sensor found
+- Do not limit or filter fans
 - Each fan entry must be an object with: { "name": <string>, "sensorId": <number>, "labelOriginal": <exact candidate label string> }
 
 CPU CORE TOPOLOGY RULES
@@ -153,7 +113,7 @@ CPU CORE TOPOLOGY RULES
 - For AMD SMT CPUs: each core has two threads, use "standard" type
 - For each core, group all its thread usage sensors together in usageSensors
 - For core clock, use the effective core clock sensor, not the actual or utility clock
-- For core temperature, use the per-core temperature sensor if available (e.g., "Core 0 TjMax", "Core 0 Temp")
+- For core temperature, use the per-core temperature sensor if available
 - Each core entry must represent one physical core with all its logical threads
 
 Example of a correct core entry:
@@ -161,16 +121,16 @@ Example of a correct core entry:
   "name": "Core 0",
   "type": "performance",
   "usageSensors": [
-    { "sensorId": 12, "labelOriginal": "P-core 0 T0 Usage" },
-    { "sensorId": 13, "labelOriginal": "P-core 0 T1 Usage" }
+    { "sensorId": 4026532608, "labelOriginal": "P-core 0 T0 Usage" },
+    { "sensorId": 4026532608, "labelOriginal": "P-core 0 T1 Usage" }
   ],
   "clockSensor": {
-    "sensorId": 24,
+    "sensorId": 4026532608,
     "labelOriginal": "P-core 0 Clock"
   },
   "temperatureSensor": {
-    "sensorId": 36,
-    "labelOriginal": "Core 0 TjMax"
+    "sensorId": 4026532864,
+    "labelOriginal": "P-core 0"
   }
 }
 
@@ -181,48 +141,48 @@ Use null (not an object) for any slot that cannot be confidently identified.
 
 {
   "cpu": {
-    "usage": { "sensorId": <number>, "labelOriginal": <label of total aggregate CPU utilization> } | null,
-    "clock": { "sensorId": <number>, "labelOriginal": <label of average/boost CPU clock> } | null,
-    "temperature": { "sensorId": <number>, "labelOriginal": <label of CPU package/die temperature> } | null,
-    "voltage": { "sensorId": <number>, "labelOriginal": <label of CPU core voltage in V> } | null,
-    "power": { "sensorId": <number>, "labelOriginal": <label of CPU package power in watts> } | null,
+    "usage": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "clock": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "temperature": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "voltage": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "power": { "sensorId": <number>, "labelOriginal": <label> } | null,
     "cores": [
       {
         "name": string,
         "type": "performance" | "efficiency" | "standard",
         "usageSensors": [
-          { "sensorId": <number>, "labelOriginal": <exact candidate label string> }
+          { "sensorId": <number>, "labelOriginal": <exact label> }
         ],
-        "clockSensor": { "sensorId": <number>, "labelOriginal": <exact candidate label string> } | null,
-        "temperatureSensor": { "sensorId": <number>, "labelOriginal": <exact candidate label string> } | null
+        "clockSensor": { "sensorId": <number>, "labelOriginal": <exact label> } | null,
+        "temperatureSensor": { "sensorId": <number>, "labelOriginal": <exact label> } | null
       }
     ]
   },
   "gpu": {
-    "usage": { "sensorId": <number>, "labelOriginal": <label of dedicated GPU core utilization> } | null,
-    "clock": { "sensorId": <number>, "labelOriginal": <label of dedicated GPU core clock> } | null,
-    "temperature": { "sensorId": <number>, "labelOriginal": <label of dedicated GPU core temperature> } | null,
-    "power": { "sensorId": <number>, "labelOriginal": <label of dedicated GPU power in watts> } | null,
-    "vramAllocated": { "sensorId": <number>, "labelOriginal": <label of allocated dedicated GPU memory in MB> } | null,
-    "vramAvailable": { "sensorId": <number>, "labelOriginal": <label of total available dedicated GPU memory in MB> } | null
+    "usage": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "clock": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "temperature": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "power": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "vramAllocated": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "vramAvailable": { "sensorId": <number>, "labelOriginal": <label> } | null
   },
   "iGpu": {
-    "usage": { "sensorId": <number>, "labelOriginal": <label of integrated GPU utilization> } | null,
-    "clock": { "sensorId": <number>, "labelOriginal": <label of integrated GPU clock> } | null,
-    "temperature": { "sensorId": <number>, "labelOriginal": <label of integrated GPU temperature> } | null,
-    "power": { "sensorId": <number>, "labelOriginal": <label of integrated GPU power in watts> } | null,
-    "vramAllocated": { "sensorId": <number>, "labelOriginal": <label of integrated GPU allocated memory> } | null
+    "usage": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "clock": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "temperature": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "power": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "vramAllocated": { "sensorId": <number>, "labelOriginal": <label> } | null
   },
   "memory": {
-    "usage": { "sensorId": <number>, "labelOriginal": <label of used physical RAM in MB> } | null,
-    "available": { "sensorId": <number>, "labelOriginal": <label of available physical RAM in MB> } | null
+    "usage": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "available": { "sensorId": <number>, "labelOriginal": <label> } | null
   },
   "fans": [
-    { "name": string, "sensorId": <number>, "labelOriginal": <exact candidate label of the RPM sensor> }
+    { "name": string, "sensorId": <number>, "labelOriginal": <exact label> }
   ],
   "battery": {
-    "level": { "sensorId": <number>, "labelOriginal": <label of battery charge percentage> } | null,
-    "chargeRate": { "sensorId": <number>, "labelOriginal": <label of battery charging/discharging power in watts> } | null
+    "level": { "sensorId": <number>, "labelOriginal": <label> } | null,
+    "chargeRate": { "sensorId": <number>, "labelOriginal": <label> } | null
   }
 }
 
