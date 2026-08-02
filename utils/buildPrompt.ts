@@ -8,6 +8,55 @@ You have complete knowledge of how every CPU, GPU, motherboard, and peripheral v
 
 Your task is to analyze a list of hardware sensor candidates and map each one to the correct semantic slot in the output JSON.
 
+STEP 1 — ANALYZE ALL SENSOR GROUPS
+
+Before mapping any sensor, examine every group name in the candidate list. Identify what hardware component each group represents.
+
+dGPU group recognition:
+- The group name starts with "dGPU" or "GPU [#n]" where n is a number
+- OR the group name contains a discrete GPU vendor with a model number: "NVIDIA GeForce RTX", "NVIDIA GeForce GTX", "NVIDIA GeForce GT", "AMD Radeon RX", "AMD Radeon HD", "Intel Arc"
+- The group has many sensors including VRAM sensors with unit MB: "Memory Available", "Memory Allocated", "D3D Memory Dedicated", "D3D Memory Dynamic"
+- This is the dedicated GPU with its own video memory
+
+iGPU group recognition:
+- The group name starts with "iGPU"
+- OR the group name contains integrated graphics names: "Intel UHD Graphics", "Intel Iris", "Intel HD Graphics", "AMD Radeon Graphics" (without RX/HD model number)
+- The group has fewer sensors and NEVER has dedicated VRAM sensors with unit MB
+- This is the integrated GPU that shares system RAM
+
+CPU group recognition:
+- The group name contains "CPU", processor model name, or core-related labels
+- Contains voltage, clock, temperature, usage sensors for processor cores
+
+System/Memory group recognition:
+- The group name contains "System", "Memory", "DRAM"
+- Contains physical memory used/available sensors
+
+Battery group recognition:
+- The group name contains "Battery"
+- Contains charge level, voltage, charge rate sensors
+
+Fan group recognition:
+- Any candidate with unit "RPM" regardless of group
+
+STEP 2 — DECIDE GPU CONFIGURATION
+
+After analyzing all groups, determine the GPU setup:
+
+If a dGPU group exists (has VRAM sensors in MB):
+- Map dGPU sensors to the "gpu" block
+- If an iGPU group also exists, map iGPU sensors to the "iGpu" block
+- If no iGPU group exists, set all "iGpu" fields to null
+
+If no dGPU group exists but an iGPU group exists:
+- Map iGPU sensors to the "iGpu" block
+- Set all "gpu" fields to null
+
+If no GPU group exists at all:
+- Set all "gpu" and "iGpu" fields to null
+
+STEP 3 — MAP SENSORS
+
 STRICT OUTPUT RULES
 
 - Return ONLY valid JSON
@@ -20,36 +69,6 @@ STRICT OUTPUT RULES
 - NEVER invent sensor labels or sensorIds — only use values that exist in the provided candidates
 - You may use ANY property from the candidate objects to make your decision (label, sensorId, unit, group, type, etc.)
 - If a sensor cannot be confidently identified, use null for the entire slot (not an object)
-
-DGPU VS IGPU — ABSOLUTE RULES
-
-You MUST output BOTH gpu AND iGpu blocks. One of them may be all-null, but both blocks must exist in the output.
-
-dGPU (Dedicated GPU) identification:
-- The group name contains a discrete GPU vendor and model number: "NVIDIA GeForce RTX", "NVIDIA GeForce GTX", "NVIDIA GeForce GT", "NVIDIA GeForce [any model]", "AMD Radeon RX", "AMD Radeon HD", "AMD Radeon [any model]", "Intel Arc [any model]"
-- The group name starts with "dGPU" or "GPU [#n]" where n is a number
-- ALWAYS has VRAM sensors: look for labels containing "Memory Available", "Memory Allocated", "D3D Memory Dedicated", "D3D Memory Dynamic" with unit MB
-- Has its own power sensor labeled "GPU Power" or similar in the same group
-- Has temperature sensors labeled "GPU Temperature" or "GPU Core Temperature" in the same group
-- Has usage sensors labeled "GPU Core Load" or "GPU Total Usage" in the same group
-- Has clock sensors labeled "GPU Clock" or "GPU Memory Clock" in the same group
-
-iGPU (Integrated GPU) identification:
-- The group name contains "Intel UHD Graphics", "Intel Iris", "Intel HD Graphics", "Intel Graphics", "AMD Radeon Graphics" (without a model number like RX or HD), "iGPU"
-- The group name starts with "iGPU"
-- NEVER has dedicated VRAM sensors with unit MB in the same group
-- Uses system RAM, not dedicated video memory
-- If the system has both dGPU and iGPU, the iGPU group will have fewer sensors and no VRAM allocation sensors
-
-CRITICAL: If a candidate group contains a discrete GPU vendor name with a model number (e.g., "NVIDIA GeForce RTX", "AMD Radeon RX", "Intel Arc"), it IS the dGPU. Map it to the "gpu" block.
-
-If a candidate group contains an integrated GPU name (e.g., "Intel UHD Graphics", "Intel Iris", "iGPU"), it IS the iGPU. Map it to the "iGpu" block.
-
-Never map dGPU sensors to iGPU slots or vice versa.
-
-If only one GPU exists:
-- If it has VRAM sensors (Memory Available, Memory Allocated, D3D Memory) with unit MB → map to "gpu", set all "iGpu" fields to null
-- If it has no VRAM sensors → map to "iGpu", set all "gpu" fields to null
 
 GPU SENSOR MAPPING — EXACT PRIORITY
 
